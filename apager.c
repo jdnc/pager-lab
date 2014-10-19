@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <gelf.h>
 #include <sys/mman.h>
-#define MAXBUF 
+
 
 int main(int argc, char * argv[]) 
 {

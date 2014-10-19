@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <gelf.h>
 #include <sys/mman.h>
+#define MAXBUF 
 
 int main(int argc, char * argv[]) 
 {
@@ -12,8 +13,9 @@ int main(int argc, char * argv[])
 	Elf * e;	
 	size_t n, shstrndx, sz;	
 	int i;
-	Elf_Scn *scn;
-	Elf_Data *data;
+	Elf_Scn * scn;
+	Elf_Data * data;
+	void * loc;
 	GElf_Shdr shdr;
 	// first of all open and check the binary
 	if ((fd = open(argv[1], O_RDONLY, 0)) < 0) {
@@ -65,9 +67,39 @@ int main(int argc, char * argv[])
 			perror("getshdr failed");
 			exit(1);
 		}
-		printf("%x\n", shdr.sh_addr);
-	
-
+		if (shdr.sh_type == SHT_PROGBITS) {
+			if ((loc = mmap((void *)shdr.sh_addr, (size_t)shdr.sh_size, 
+			PROT_EXEC | PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE, fd, (off_t)shdr.sh_offset)) == MAP_FAILED) {
+				perror("could not mmap the region");
+			}
+			if (! (shdr.sh_flags & SHF_WRITE)) {
+				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ) < 0) {
+					perror("mprotect failed");
+					exit(1);
+				}
+			}
+			if (shdr.sh_flags & SHF_EXECINSTR) {
+				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_EXEC) < 0) {
+					perror("mprotect failed");
+					exit(1);
+				}
+			}	
+		}
+		else if (shdr.sh_type == SHT_NOBITS) {
+			if ((loc = mmap((void *)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ | PROT_WRITE, 
+			     MAP_ANONYMOUS, -1, 0) == MAP_FAILED) {
+				perror("could not mmap the region");
+			}
+			if (! (shdr.sh_flags & SHF_WRITE)) {
+				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ) < 0) {
+					perror("mprotect failed");
+					exit(1);
+				}
+			}
+			
+		}
 	}
+	elf_end(e);
+	close(fd);
 	return 0;
 }

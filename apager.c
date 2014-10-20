@@ -2,8 +2,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <gelf.h>
+#include <sys/types.h>
 #include <sys/mman.h>
 
 
@@ -11,12 +13,14 @@ int main(int argc, char * argv[])
 {
 	int fd;
 	Elf * e;	
-	size_t n, shstrndx, sz;	
+	size_t n, shstrndx, sz, page_size;	
 	int i;
 	Elf_Scn * scn;
 	Elf_Data * data;
 	void * loc;
+	void * prevAddr = 0;
 	GElf_Shdr shdr;
+	page_size = getpagesize();
 	// first of all open and check the binary
 	if ((fd = open(argv[1], O_RDONLY, 0)) < 0) {
 		perror("could not open executable");
@@ -67,31 +71,49 @@ int main(int argc, char * argv[])
 			perror("getshdr failed");
 			exit(1);
 		}
-		if (shdr.sh_type == SHT_PROGBITS) {
-			if ((loc = mmap((void *)shdr.sh_addr, (size_t)shdr.sh_size, 
-			PROT_EXEC | PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE, fd, (off_t)shdr.sh_offset)) == MAP_FAILED) {
+		if (shdr.sh_type == SHT_PROGBITS && (shdr.sh_flags & SHF_ALLOC)) {
+		//	mmap(NULL, 4096, PROT_READ|PROT_WRITE,
+		//	MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+		//	perror("mmap :" );
+			void * addr = (void *)(shdr.sh_addr - shdr.sh_addr % page_size);
+			off_t off = (off_t)(shdr.sh_offset - shdr.sh_offset % page_size);
+			if ((loc = mmap(addr, shdr.sh_size, 
+			PROT_EXEC | PROT_READ,  MAP_PRIVATE | MAP_FIXED, fd, off)) == MAP_FAILED) {
 				perror("could not mmap the region");
+				exit(1);
 			}
-			if (! (shdr.sh_flags & SHF_WRITE)) {
-				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ) < 0) {
+			if (shdr.sh_flags & SHF_WRITE) {
+				if (mprotect(addr, (size_t)shdr.sh_size, PROT_WRITE) < 0) {
 					perror("mprotect failed");
 					exit(1);
 				}
 			}
 			if (shdr.sh_flags & SHF_EXECINSTR) {
-				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_EXEC) < 0) {
+				if (mprotect(addr, (size_t)shdr.sh_size, PROT_EXEC) < 0) {
 					perror("mprotect failed");
 					exit(1);
 				}
 			}	
+			prevAddr = addr;
 		}
-		else if (shdr.sh_type == SHT_NOBITS) {
-			if ((loc = mmap((void *)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ | PROT_WRITE, 
-			     MAP_ANONYMOUS, -1, 0) == MAP_FAILED) {
-				perror("could not mmap the region");
+		else if (shdr.sh_type == SHT_NOBITS && (shdr.sh_flags & SHF_ALLOC)) {
+			void * addr = (void *)(shdr.sh_addr - shdr.sh_addr % page_size);
+			if (! (addr == prevAddr)) {
+				if ((loc = mmap(addr, (size_t)shdr.sh_size, PROT_READ | PROT_WRITE, 
+				    MAP_PRIVATE| MAP_ANONYMOUS | MAP_FIXED, -1, 0)) == MAP_FAILED) {
+					perror("could not mmap the region");
+				}
+				prevAddr = addr;
 			}
-			if (! (shdr.sh_flags & SHF_WRITE)) {
-				if (mprotect((void*)shdr.sh_addr, (size_t)shdr.sh_size, PROT_READ) < 0) {
+//			memset((void *)shdr.sh_addr, 0x0, (size_t)shdr.sh_size);
+			if (!(shdr.sh_flags & SHF_EXECINSTR)) {
+				if (mprotect(addr, (size_t)shdr.sh_size, PROT_READ) < 0) {
+					perror("mprotect failed");
+					exit(1);
+				}
+			}
+			if (shdr.sh_flags & SHF_WRITE) {
+				if (mprotect(addr, (size_t)shdr.sh_size, PROT_WRITE) < 0) {
 					perror("mprotect failed");
 					exit(1);
 				}

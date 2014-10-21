@@ -66,17 +66,27 @@ int main(int argc, char * argv[])
 		exit(1);
 	}
 	scn = NULL;
+	int count = 0;
 	while((scn = elf_nextscn(e, scn)) != NULL) {
 		if(gelf_getshdr(scn, &shdr) == NULL){
 			perror("getshdr failed");
 			exit(1);
 		}
+		void * addr = (void *)(shdr.sh_addr - shdr.sh_addr % page_size);
+		off_t off = (off_t)(shdr.sh_offset - shdr.sh_offset % page_size);
+		// if first time, check whether the program is loading on top of itself
+		if (count == 0) {
+			msync(addr, page_size, MS_SYNC);
+			if (errno != ENOMEM) {
+			  fprintf(stderr, "address is already mapped\n");
+			  exit(1);
+			}
+		}		
+		++count;
 		if (shdr.sh_type == SHT_PROGBITS && (shdr.sh_flags & SHF_ALLOC)) {
 		//	mmap(NULL, 4096, PROT_READ|PROT_WRITE,
 		//	MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 		//	perror("mmap :" );
-			void * addr = (void *)(shdr.sh_addr - shdr.sh_addr % page_size);
-			off_t off = (off_t)(shdr.sh_offset - shdr.sh_offset % page_size);
 			if ((loc = mmap(addr, shdr.sh_size, 
 			PROT_EXEC | PROT_READ,  MAP_PRIVATE | MAP_FIXED, fd, off)) == MAP_FAILED) {
 				perror("could not mmap the region");
@@ -97,11 +107,11 @@ int main(int argc, char * argv[])
 			prevAddr = addr;
 		}
 		else if (shdr.sh_type == SHT_NOBITS && (shdr.sh_flags & SHF_ALLOC)) {
-			void * addr = (void *)(shdr.sh_addr - shdr.sh_addr % page_size);
 			if (! (addr == prevAddr)) {
 				if ((loc = mmap(addr, (size_t)shdr.sh_size, PROT_READ | PROT_WRITE, 
 				    MAP_PRIVATE| MAP_ANONYMOUS | MAP_FIXED, -1, 0)) == MAP_FAILED) {
 					perror("could not mmap the region");
+					exit(1);
 				}
 				prevAddr = addr;
 			}

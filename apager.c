@@ -131,6 +131,14 @@ int main(int argc, char * argv[])
 			
 		}
 	}
+
+	// now get the entry point of the program and write some assembly
+	GElf_Ehdr ehdr;
+	if(gelf_getehdr(e, &ehdr) == NULL) {
+		perror("getehdr error.");
+		exit(1);
+	}
+	printf("The entry point of the program is: %x\n", ehdr.e_entry);
 	elf_end(e);
 	close(fd);
 	return 0;

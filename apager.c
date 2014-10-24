@@ -5,9 +5,11 @@
 #include <string.h>
 #include <errno.h>
 #include <gelf.h>
+//% #include <sys/auxv.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 
+extern char** environ;
 
 int main(int argc, char * argv[]) 
 {
@@ -139,7 +141,13 @@ int main(int argc, char * argv[])
 		exit(1);
 	}
 	printf("The entry point of the program is: %x\n", ehdr.e_entry);
+	// set up the stack
+	// first get the stack pointer
+	asm("movl %rsp, %rcx \n\t");
+	register int stack_loc asm("rcx");
+	printf("The stack address is: %x\n", stack_loc);
 	elf_end(e);
 	close(fd);
 	return 0;
+	
 }

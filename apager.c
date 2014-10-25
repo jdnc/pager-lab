@@ -111,7 +111,7 @@ int main(int argc, char * argv[])
 		else if (shdr.sh_type == SHT_NOBITS && (shdr.sh_flags & SHF_ALLOC)) {
 			if (! (addr == prevAddr)) {
 				if ((loc = mmap(addr, (size_t)shdr.sh_size, PROT_READ | PROT_WRITE, 
-				    MAP_PRIVATE| MAP_ANONYMOUS | MAP_FIXED, -1, 0)) == MAP_FAILED) {
+				    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) == MAP_FAILED) {
 					perror("could not mmap the region");
 					exit(1);
 				}
@@ -141,11 +141,25 @@ int main(int argc, char * argv[])
 		exit(1);
 	}
 	printf("The entry point of the program is: %x\n", ehdr.e_entry);
-	// set up the stack
+	/*/ set up the stack
 	// first get the stack pointer
-	asm("movl %rsp, %rcx \n\t");
-	register int stack_loc asm("rcx");
-	printf("The stack address is: %x\n", stack_loc);
+	asm("movq rsp , rax \n\t");
+	register long stack_loc asm("rax");
+	char * addr = stack_loc;
+	addr = addr - 8;
+	*addr = 'h';
+	addr = addr - 8;
+	*addr = 'e';
+	printf("The stack address is: %lx\n", stack_loc);
+	*/
+	//char c = 'h';
+    	int m = 100;
+	asm volatile(
+	"pushq %%rax\n\t"
+        : 
+	:"a"(m)
+	:);
+
 	elf_end(e);
 	close(fd);
 	return 0;

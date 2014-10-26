@@ -152,12 +152,14 @@ int main(int argc, char * argv[])
 	*addr = 'e';
 	printf("The stack address is: %lx\n", stack_loc);
 	*/
-	//char c = 'h';
-    	int m = 100;
+	char c = 'h';
+	char d = 'e';
+    	//int m = 100;
 	asm volatile(
-	"pushq %%rax\n\t"
+	"push %%ax\n\t"
+	"push %%bx\n\t"
         : 
-	:"a"(m)
+	:"a"(c), "b"(d)
 	:);
 
 	elf_end(e);
